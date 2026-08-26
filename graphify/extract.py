@@ -54,6 +54,7 @@ from graphify.extractors.powershell import extract_powershell, extract_powershel
 from graphify.extractors.razor import extract_razor  # noqa: F401
 from graphify.extractors.rust import extract_rust  # noqa: F401
 from graphify.extractors.shader import extract_glsl, extract_hlsl, extract_slang  # noqa: F401
+from graphify.extractors.shaderlab import extract_shaderlab  # noqa: F401
 from graphify.extractors.sln import extract_sln  # noqa: F401
 from graphify.extractors.spirv import extract_spirv  # noqa: F401
 from graphify.extractors.sql import extract_sql  # noqa: F401
@@ -2236,6 +2237,7 @@ _LANG_FAMILY_BY_EXT: dict[str, str] = {
     # Shader sources share declarations only through explicit include/import
     # evidence; the cross-file call gate below enforces that boundary.
     ".hlsl": "shader", ".hlsli": "shader", ".glsl": "shader", ".slang": "shader",
+    ".shader": "shader", ".compute": "shader", ".cginc": "shader", ".hlslinc": "shader",
     ".spv": "spirv",
     # Single-language families
     ".py": "python",
@@ -5193,6 +5195,10 @@ _DISPATCH: dict[str, Any] = {
     ".hlsli": extract_hlsl,
     ".glsl": extract_glsl,
     ".slang": extract_slang,
+    ".shader": extract_shaderlab,
+    ".compute": extract_shaderlab,
+    ".cginc": extract_shaderlab,
+    ".hlslinc": extract_shaderlab,
     ".spv": extract_spirv,
     ".rb": extract_ruby, ".rake": extract_ruby,
     ".cs": extract_csharp,
@@ -6701,6 +6707,7 @@ def extract(
     _IMPORT_GATED_CALL_SUFFIXES = (
         ".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs",
         ".hlsl", ".hlsli", ".glsl", ".slang",
+        ".shader", ".compute", ".cginc", ".hlslinc",
     )
     _go_module_cache: dict[Path, str | None] = {}
     for rc in all_raw_calls:

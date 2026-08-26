@@ -120,8 +120,12 @@ def _resource_kind(type_name: str, qualifiers: set[str]) -> tuple[str, str] | No
 
 
 class _Extractor:
-    def __init__(self, path: Path, language: str, source: bytes, root) -> None:
+    def __init__(self, path: Path, language: str, source: bytes, root, hook=None) -> None:
         self.path = path
+        # Called after declarations are collected but before stage I/O and call
+        # resolution, so a wrapper (ShaderLab) can mark entry points in time to
+        # get stage_input/stage_output edges. See extractors/shaderlab.py.
+        self.hook = hook
         self.language = language
         self.source = source
         self.text = source.decode("utf-8", errors="replace")
@@ -811,6 +815,8 @@ class _Extractor:
         self.add_node(self.file_nid, self.path.name, 1, "file")
         self.walk(self.root)
         self.recover_known_forms()
+        if self.hook is not None:
+            self.hook(self)
         self.emit_stage_io()
         self.emit_calls_and_uses()
         errors = []
@@ -833,7 +839,7 @@ class _Extractor:
         return result
 
 
-def _extract(path: Path, language: str) -> dict:
+def _extract(path: Path, language: str, *, source: bytes | None = None, hook=None) -> dict:
     try:
         module = importlib.import_module(_MODULES[language])
         from tree_sitter import Language, Parser
@@ -848,13 +854,14 @@ def _extract(path: Path, language: str) -> dict:
             )
             ts_language = Language(module.language())
         parser = Parser(ts_language)
-        source = path.read_bytes()
+        if source is None:
+            source = path.read_bytes()
         root = parser.parse(source).root_node
     except ImportError:
         return {"nodes": [], "edges": [], "error": f"{_MODULES[language]} not installed"}
     except Exception as exc:
         return {"nodes": [], "edges": [], "error": str(exc)}
-    return _Extractor(path, language, source, root).result()
+    return _Extractor(path, language, source, root, hook=hook).result()
 
 
 def extract_hlsl(path: Path) -> dict:

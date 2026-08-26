@@ -1,0 +1,24 @@
+#pragma kernel Accumulate
+
+RWStructuredBuffer<float4> _Output;
+StructuredBuffer<float4> _Input;
+
+CBUFFER_START(Params)
+    uint _Count;
+    float _Scale;
+CBUFFER_END
+
+float4 ScaleSample(float4 value)
+{
+    return value * _Scale;
+}
+
+[numthreads(64, 1, 1)]
+void Accumulate(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= _Count)
+    {
+        return;
+    }
+    _Output[id.x] = ScaleSample(_Input[id.x]);
+}

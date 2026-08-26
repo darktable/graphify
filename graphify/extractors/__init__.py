@@ -29,6 +29,7 @@ from graphify.extractors.powershell import extract_powershell, extract_powershel
 from graphify.extractors.razor import extract_razor
 from graphify.extractors.rust import extract_rust
 from graphify.extractors.shader import extract_glsl, extract_hlsl, extract_slang
+from graphify.extractors.shaderlab import extract_shaderlab
 from graphify.extractors.sln import extract_sln
 from graphify.extractors.spirv import extract_spirv
 from graphify.extractors.sql import extract_sql
@@ -62,6 +63,7 @@ LANGUAGE_EXTRACTORS: dict[str, Callable[[Path], dict]] = {
     "powershell_manifest": extract_powershell_manifest,
     "razor": extract_razor,
     "rust": extract_rust,
+    "shaderlab": extract_shaderlab,
     "slang": extract_slang,
     "sln": extract_sln,
     "spirv": extract_spirv,

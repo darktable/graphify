@@ -80,6 +80,7 @@ _EDGE_LANG_FAMILY: dict[str, str] = {
     ".cxx": "c", ".hh": "c", ".hxx": "c",
     ".cu": "c", ".cuh": "c", ".metal": "c", ".m": "c", ".mm": "c",
     ".hlsl": "shader", ".hlsli": "shader", ".glsl": "shader", ".slang": "shader",
+    ".shader": "shader", ".compute": "shader", ".cginc": "shader", ".hlslinc": "shader",
     ".spv": "spirv",
     ".rb": "rb", ".rake": "rb", ".php": "php", ".cs": "cs", ".swift": "swift", ".lua": "lua",
 }
