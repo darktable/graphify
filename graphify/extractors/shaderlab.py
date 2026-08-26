@@ -42,7 +42,11 @@ _PASS_NAME_RE = re.compile(r'(?m)^[ \t]*Name\s+"([^"]*)"')
 
 _CBUFFER_START_RE = re.compile(r"CBUFFER_START\s*\(([^)]*)\)")
 _CBUFFER_END_RE = re.compile(r"\bCBUFFER_END\b")
-_BARE_MACRO_RE = re.compile(r"(?m)^([ \t]*[A-Z_][A-Z0-9_]+)[ \t]*$")
+# The trailing lookahead, not "[ \t]*$": on a CRLF file the \r sits between the
+# last space and the newline, so a plain $ never matches and the rule silently
+# does nothing. Unity checkouts are CRLF by default, which is exactly where this
+# rule has to work. The lookahead also leaves the \r in place for the rewrite.
+_BARE_MACRO_RE = re.compile(r"(?m)^([ \t]*[A-Z_][A-Z0-9_]+)[ \t]*(?=\r?$)")
 
 # ALL_CAPS_WITH_UNDERSCORES callees are Unity/SRP macros (SAMPLE_TEXTURE2D,
 # ZERO_INITIALIZE, UNITY_ACCESS_INSTANCED_PROP), not functions the graph should
@@ -71,15 +75,20 @@ def _blank(text: str) -> str:
     return re.sub(r"[^\r\n]", " ", text)
 
 
-def _mask_shaderlab(text: str) -> str:
+def _mask_shaderlab(text: str, is_shaderlab: bool) -> str:
     """Blank everything outside HLSL/Cg program blocks, preserving line count.
 
-    Returns the text unchanged when there are no program markers, which is the
-    bare .hlsl/.cginc/.compute case.
+    ``is_shaderlab`` must be True for a .shader file and False for a bare
+    include/compute unit. It decides what "no program blocks" means: in a
+    .shader it means a fixed-function shader with no HLSL at all (blank the
+    whole document - Unity's Legacy/Mobile and editor-gizmo shaders are full of
+    `Material { Diffuse [_Color] }` and `SetTexture [_MainTex] { }`, which the
+    HLSL grammar reads as one long error), while in a .cginc/.compute it means
+    the whole file is HLSL and must be handed over untouched.
     """
     spans = [match.span(1) for match in _PROGRAM_RE.finditer(text)]
     if not spans:
-        return text
+        return _blank(text) if is_shaderlab else text
     out: list[str] = []
     cursor = 0
     for start, end in spans:
@@ -231,7 +240,8 @@ def extract_shaderlab(path: Path) -> dict:
     except OSError as exc:
         return {"nodes": [], "edges": [], "error": str(exc)}
 
-    source = _neutralize_macros(_mask_shaderlab(text)).encode("utf-8")
+    is_shaderlab = path.suffix.lower() == ".shader"
+    source = _neutralize_macros(_mask_shaderlab(text, is_shaderlab)).encode("utf-8")
 
     captured: list = []
 

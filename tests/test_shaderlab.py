@@ -181,3 +181,72 @@ def test_grabpass_without_a_block_is_not_a_pass(tmp_path: Path) -> None:
     passes = [node["label"] for node in result["nodes"]
               if node.get("metadata", {}).get("shader", {}).get("kind") == "shader_pass"]
     assert passes == ["Pass:Only"]
+
+
+def test_macro_neutralization_survives_crlf_line_endings(tmp_path: Path) -> None:
+    """Unity checks out CRLF by default, so the rules must not need a bare LF.
+
+    A '$' anchor sits after the '\r', so a rule written as "[ \t]*$" silently
+    stops firing on every real Unity file while still passing on LF fixtures.
+    """
+    body = (
+        'Shader "X/CRLF"\n'
+        "{\n"
+        "    SubShader\n"
+        "    {\n"
+        "        Pass\n"
+        "        {\n"
+        "            HLSLPROGRAM\n"
+        "            #pragma vertex vert\n"
+        "            CBUFFER_START(UnityPerMaterial)\n"
+        "                float4 _Color;\n"
+        "            CBUFFER_END\n"
+        "            struct Attributes\n"
+        "            {\n"
+        "                float4 positionOS : POSITION;\n"
+        "                UNITY_VERTEX_INPUT_INSTANCE_ID\n"
+        "            };\n"
+        "            float4 vert(Attributes i) : SV_POSITION { return i.positionOS; }\n"
+        "            ENDHLSL\n"
+        "        }\n"
+        "    }\n"
+        "}\n"
+    )
+    lf = tmp_path / "lf.shader"
+    lf.write_bytes(body.encode())
+    crlf = tmp_path / "crlf.shader"
+    crlf.write_bytes(body.replace("\n", "\r\n").encode())
+
+    lf_result, crlf_result = extract_shaderlab(lf), extract_shaderlab(crlf)
+    assert "parse_errors" not in lf_result
+    assert "parse_errors" not in crlf_result
+    for result in (lf_result, crlf_result):
+        assert _meta(result, "UnityPerMaterial")["resource_kind"] == "uniform_buffer"
+        assert _meta(result, "vert()")["stage"] == "vertex"
+        assert _node(result, "Attributes")
+
+
+def test_fixed_function_shaderlab_has_no_hlsl_to_parse(tmp_path: Path) -> None:
+    """A Legacy/Mobile shader is pure ShaderLab; feeding it to the HLSL grammar
+    produces one long error, so the whole document must be blanked."""
+    shader = tmp_path / "Legacy.shader"
+    shader.write_text(
+        'Shader "Legacy Shaders/Diffuse Fast" {\n'
+        "Properties {\n"
+        '    _Color ("Main Color", Color) = (1,1,1,1)\n'
+        '    _MainTex ("Base (RGB)", 2D) = "white" {}\n'
+        "}\n"
+        "SubShader {\n"
+        "    Pass {\n"
+        "        Material { Diffuse [_Color] }\n"
+        "        Lighting On\n"
+        "        SetTexture [_MainTex] { combine texture * primary }\n"
+        "    }\n"
+        "}\n"
+        'Fallback "Legacy Shaders/VertexLit"\n'
+        "}\n",
+        encoding="utf-8",
+    )
+    result = extract_shaderlab(shader)
+    assert "parse_errors" not in result
+    assert _node(result, "Legacy Shaders/Diffuse Fast")
