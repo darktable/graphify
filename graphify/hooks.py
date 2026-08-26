@@ -272,6 +272,25 @@ else:
 """
 
 
+# Windows: run the detached launcher under pythonw.exe when one sits beside the
+# detected interpreter. python.exe is a console-subsystem binary, so when the hook
+# fires from a GUI git client or an agent shell with no console attached, Windows
+# allocates a console for it and a prompt window flashes on screen mid-commit.
+# pythonw.exe is GUI subsystem and allocates none. The launcher already redirects
+# the child to GRAPHIFY_REBUILD_LOG, so losing stdio on the outer process costs
+# nothing; on POSIX no pythonw exists and GRAPHIFY_PYTHON is used unchanged.
+_PYTHONW_SWITCH = """_GFY_LAUNCH="$GRAPHIFY_PYTHON"
+case "$_GFY_LAUNCH" in
+    *python.exe) _GFY_W="${_GFY_LAUNCH%python.exe}pythonw.exe" ;;
+    *python)     _GFY_W="${_GFY_LAUNCH}w.exe" ;;
+    *)           _GFY_W="" ;;
+esac
+if [ -n "$_GFY_W" ] && [ -x "$_GFY_W" ]; then
+    _GFY_LAUNCH="$_GFY_W"
+fi
+"""
+
+
 def _detached_launch(rebuild_body: str) -> str:
     """Return a POSIX-sh line that runs ``rebuild_body`` as a detached background
     Python process via ``$GRAPHIFY_PYTHON``.
@@ -282,7 +301,7 @@ def _detached_launch(rebuild_body: str) -> str:
     returns the instant the child is spawned, so the git hook never blocks.
     """
     launcher = _LAUNCHER_TEMPLATE.replace("__REBUILD_BODY__", rebuild_body)
-    return '"$GRAPHIFY_PYTHON" -c "' + launcher + '"\n'
+    return _PYTHONW_SWITCH + '"$_GFY_LAUNCH" -c "' + launcher + '"\n'
 
 
 # Skip the rebuild inside a linked worktree (git worktree add), shared by both

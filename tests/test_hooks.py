@@ -224,7 +224,8 @@ def test_hook_check_no_additionalContext(tmp_path):
 import ast  # noqa: E402
 import re  # noqa: E402
 
-from graphify.hooks import (  # noqa: E402
+from graphify.hooks import (
+    _PYTHONW_SWITCH,  # noqa: E402
     _HOOK_SCRIPT,
     _CHECKOUT_SCRIPT,
     _REBUILD_BODY_COMMIT,
@@ -359,10 +360,27 @@ def test_rebuild_bodies_arm_a_timeout_without_sigalrm(name, body):
 
 def test_detached_launch_targets_graphify_python():
     """The launcher must run via the resolved $GRAPHIFY_PYTHON, not a bare
-    `python`, so it uses the same interpreter the detection block selected."""
+    `python`, so it uses the same interpreter the detection block selected.
+    $_GFY_LAUNCH is that interpreter, swapped for its pythonw.exe sibling on
+    Windows so no console window flashes during the commit."""
     snippet = _detached_launch(_REBUILD_BODY_COMMIT)
-    assert snippet.startswith('"$GRAPHIFY_PYTHON" -c "')
+    assert snippet.startswith('_GFY_LAUNCH="$GRAPHIFY_PYTHON"')
+    assert '"$_GFY_LAUNCH" -c "' in snippet
+    assert "pythonw.exe" in snippet
     assert "nohup" not in snippet
+
+
+def test_pythonw_swap_only_applies_to_an_existing_sibling():
+    """The pythonw swap must be a no-op when no pythonw sits beside the
+    interpreter (every POSIX install), so the rebuild still launches."""
+    import subprocess as _sp
+
+    script = _PYTHONW_SWITCH + 'echo "$_GFY_LAUNCH"\n'
+    for given in ("/usr/bin/python3", "/usr/bin/python", "python"):
+        res = _sp.run(["sh", "-c", script], capture_output=True, text=True,
+                      env={**os.environ, "GRAPHIFY_PYTHON": given})
+        assert res.returncode == 0, res.stderr
+        assert res.stdout.strip() == given, res.stdout
 
 
 def test_installed_hooks_contain_no_nohup(tmp_path):

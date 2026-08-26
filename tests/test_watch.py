@@ -183,7 +183,6 @@ def test_watch_raises_without_watchdog(tmp_path, monkeypatch):
 # --- _rebuild_lock (GH-858) ---
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="fcntl-only (POSIX)")
 def test_rebuild_lock_writes_pid_with_newline(tmp_path):
     out = tmp_path / "graphify-out"
     lock_path = out / ".rebuild.lock"
@@ -194,7 +193,6 @@ def test_rebuild_lock_writes_pid_with_newline(tmp_path):
         assert contents == f"{os.getpid()}\n", contents
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="fcntl-only (POSIX)")
 def test_rebuild_lock_removed_after_release(tmp_path):
     """GH-858: lock file must be unlinked once the rebuild completes so
     downstream waiters that poll for its absence unblock promptly."""
@@ -205,7 +203,6 @@ def test_rebuild_lock_removed_after_release(tmp_path):
     assert not lock_path.exists(), "lock file should be unlinked after release"
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="fcntl-only (POSIX)")
 def test_rebuild_lock_does_not_accumulate_pids_across_runs(tmp_path):
     """GH-858: each acquisition truncates and rewrites the PID line rather
     than appending, so the file never grows into a digit-concatenation."""
@@ -1140,7 +1137,6 @@ def test_rebuild_code_preupgrade_marker_less_node_one_cycle_lag(tmp_path):
     assert "bar()" in labels(healed), "surviving symbol must be kept throughout"
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="fcntl-only (POSIX)")
 def test_rebuild_lock_non_blocking_does_not_clobber_holder(tmp_path):
     """GH-858: a non-blocking caller that fails to acquire the lock must not
     truncate the holder's PID payload."""
@@ -1852,7 +1848,6 @@ def test_queue_pending_noop_on_empty_list(tmp_path):
     assert not (out / _PENDING_FILENAME).exists()
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="fcntl-only (POSIX)")
 def test_rebuild_code_queues_on_lock_contention(tmp_path, monkeypatch, capsys):
     """#1059: when the rebuild lock is held, an incremental hook must queue
     its changed_paths to .pending_changes and print 'queued' instead of
@@ -1887,7 +1882,6 @@ def test_rebuild_code_queues_on_lock_contention(tmp_path, monkeypatch, capsys):
         assert pending.read_text(encoding="utf-8").splitlines() == ["a.py", "b.py"]
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="fcntl-only (POSIX)")
 def test_rebuild_code_merges_pending_on_acquire(tmp_path, monkeypatch):
     """#1059: the process that acquires the lock must drain .pending_changes
     and pass the merged change set to the inner rebuild call."""
@@ -1927,7 +1921,6 @@ def test_rebuild_code_merges_pending_on_acquire(tmp_path, monkeypatch):
     assert not (out / watch_mod._PENDING_FILENAME).exists()
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="fcntl-only (POSIX)")
 def test_rebuild_code_drains_late_arrivals(tmp_path, monkeypatch):
     """#1059: after the primary rebuild, the lock-holder must loop and drain
     any paths queued by hooks that arrived mid-rebuild."""

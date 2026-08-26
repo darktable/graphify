@@ -155,39 +155,82 @@ def _merge_changed_paths(*sources: "list[Path] | None") -> list[Path]:
     return out
 
 
+# Byte offset of the Windows lock region - past any real content so the PID
+# line at offset 0 stays readable while the lock is held.
+_LOCK_BYTE_OFFSET = 1 << 30
+
+
 @contextlib.contextmanager
 def _rebuild_lock(out_dir: Path, *, blocking: bool = False):
     """Per-repo advisory lock around a rebuild.
 
     Yields True if acquired, False if another rebuild is already running and
-    ``blocking`` is False. Uses fcntl.flock so the lock is released
+    ``blocking`` is False. POSIX uses fcntl.flock; Windows (no fcntl) uses
+    msvcrt.locking on a single byte of the same file. Both release the lock
     automatically if the process is killed (no stale-lock cleanup needed).
+
+    Windows used to get a no-op yield(True) here, so a second commit landing
+    while the first hook rebuild was still running started a second concurrent
+    rebuild instead of queueing its change set (the queue/drain path in
+    _rebuild_code only engages when the lock is actually contended).
 
     While the lock is held, ``.rebuild.lock`` contains the owning PID followed
     by a newline so external pollers (publish scripts, etc.) can read it.
     On successful release the file is unlinked so downstream tooling that
     waits for the lock to clear by polling for its absence unblocks promptly.
-
-    Falls back to a no-op yield(True) on platforms without fcntl (Windows).
     """
     try:
         import fcntl
     except ImportError:
-        yield True
-        return
+        fcntl = None
+        try:
+            import msvcrt
+        except ImportError:  # neither locking API - degrade to no-op
+            yield True
+            return
 
     out_dir.mkdir(parents=True, exist_ok=True)
     lock_path = out_dir / ".rebuild.lock"
     # "a+" creates the file if missing without truncating an existing holder's
-    # PID payload — important because another process may have already written
-    # its PID before we attempt the flock.
+    # PID payload - important because another process may have already written
+    # its PID before we attempt the lock.
     fh = open(lock_path, "a+", encoding="utf-8")
+
+    def _acquire() -> bool:
+        if fcntl is not None:
+            flags = fcntl.LOCK_EX if blocking else (fcntl.LOCK_EX | fcntl.LOCK_NB)
+            try:
+                fcntl.flock(fh.fileno(), flags)
+            except BlockingIOError:
+                return False
+            return True
+        # Windows: lock one byte far past EOF, never byte 0. msvcrt.locking is a
+        # MANDATORY lock - a locked byte 0 makes the PID line unreadable to every
+        # other process, including the pollers this file exists for. LK_NBLCK
+        # fails immediately when held; LK_LOCK retries ~10s then raises, so
+        # blocking mode loops on it.
+        while True:
+            os.lseek(fh.fileno(), _LOCK_BYTE_OFFSET, os.SEEK_SET)
+            try:
+                msvcrt.locking(fh.fileno(), msvcrt.LK_LOCK if blocking else msvcrt.LK_NBLCK, 1)
+                return True
+            except OSError:
+                if not blocking:
+                    return False
+
+    def _release() -> None:
+        if fcntl is not None:
+            with contextlib.suppress(OSError):
+                fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
+            return
+        with contextlib.suppress(OSError, ValueError):
+            fh.flush()
+            os.lseek(fh.fileno(), _LOCK_BYTE_OFFSET, os.SEEK_SET)
+            msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, 1)
+
     acquired = False
     try:
-        flags = fcntl.LOCK_EX if blocking else (fcntl.LOCK_EX | fcntl.LOCK_NB)
-        try:
-            fcntl.flock(fh.fileno(), flags)
-        except BlockingIOError:
+        if not _acquire():
             yield False
             return
         acquired = True
@@ -203,13 +246,13 @@ def _rebuild_lock(out_dir: Path, *, blocking: bool = False):
         yield True
     finally:
         if acquired:
-            try:
-                fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
-            except OSError:
-                pass
+            _release()
         fh.close()
         # Signal "rebuild done" by removing the lock file. Only the holder
         # unlinks; a non-acquiring caller leaves the existing lock in place.
+        # On Windows the unlink can fail while a contender still has the file
+        # open; harmless, since contention is decided by the lock API and not
+        # by the file existing.
         if acquired:
             with contextlib.suppress(OSError):
                 lock_path.unlink()
