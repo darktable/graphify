@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import re
+
 import pytest
 
 import graphify.__main__ as mainmod
@@ -38,8 +40,11 @@ def test_skill_older_than_package_recommends_install(tmp_path, monkeypatch, caps
     skill_dst = _make_skill(tmp_path, "0.8.27")
     mainmod._check_skill_version(skill_dst)
     err = capsys.readouterr().err
-    assert "Run 'graphify install' to update" in err
+    assert re.search(r"Run 'graphify install[^']*' to update", err), err
     assert "downgrade" not in err
+    # The dir being complained about must be identifiable (the check runs once
+    # per install location, so a pathless warning is ambiguous).
+    assert str(skill_dst.parent) in err or "~/" in err, err
 
 
 def test_skill_newer_than_package_recommends_upgrade_not_install(tmp_path, monkeypatch, capsys):
@@ -47,8 +52,11 @@ def test_skill_newer_than_package_recommends_upgrade_not_install(tmp_path, monke
     skill_dst = _make_skill(tmp_path, "0.9.2")
     mainmod._check_skill_version(skill_dst)
     err = capsys.readouterr().err
-    # must NOT tell the user to run install (that would downgrade the skill)
-    assert "Run 'graphify install' to update" not in err
+    # must NOT tell the user to run install (that would downgrade the skill).
+    # Matched as a pattern: the message legitimately mentions `graphify install`
+    # when explaining what NOT to do, so only the "to update" recommendation
+    # counts as the forbidden advice.
+    assert not re.search(r"Run 'graphify install[^']*' to update", err), err
     assert "downgrade" in err
     assert "upgrade" in err.lower()
 

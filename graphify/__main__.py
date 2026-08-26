@@ -160,6 +160,40 @@ def __getattr__(name: str) -> str:
 
 
 
+def _skill_label(skill_dst: Path) -> str:
+    """Directory to name in a skill warning.
+
+    The warnings fire once per install location and used to name none of them,
+    so a user with several agent platforms installed saw the same sentence
+    repeated with no way to tell which dir to fix. Reports the skill dir
+    (SKILL.md's parent), shortened to ~ when it is under the home dir.
+    """
+    d = skill_dst.parent
+    try:
+        return "~/" + d.relative_to(Path.home()).as_posix()
+    except ValueError:
+        return str(d)
+
+
+def _skill_repair_command(skill_dst: Path) -> str:
+    """The exact `graphify install` invocation that refreshes *skill_dst*.
+
+    `--platform` accepts exactly ONE value (the "P|P" in its usage line means
+    "or", not a list), so a dir that several platforms write to cannot be named
+    by a single --platform value - and picking one arbitrarily can install the
+    wrong variant, since e.g. claude and windows share ~/.claude/skills but
+    ship different skill bodies. For those, plain `graphify install` is the
+    correct advice: it is what resolves the platform choice in the first place.
+    """
+    names = [
+        name for name in _PLATFORM_CONFIG
+        if _platform_skill_destination(name) == skill_dst
+    ]
+    if len(names) == 1:
+        return f"graphify install --platform {names[0]}"
+    return "graphify install"
+
+
 def _check_skill_version(skill_dst: Path) -> None:
     """Warn if the installed skill is from an older graphify version."""
     version_file = skill_dst.parent / ".graphify_version"
@@ -173,7 +207,8 @@ def _check_skill_version(skill_dst: Path) -> None:
     except OSError:
         return
     if not skill_exists:
-        print("  warning: skill dir exists but SKILL.md is missing. Run 'graphify install' to repair.", file=sys.stderr)
+        print(f"  warning: {_skill_label(skill_dst)}: skill dir exists but SKILL.md is missing. "
+              f"Run 'graphify install' to repair.", file=sys.stderr)
         return
     # A progressive SKILL.md links to its references/ sidecar. If the body points
     # at references/ but the dir is gone (manual delete, partial upgrade), the
@@ -183,7 +218,8 @@ def _check_skill_version(skill_dst: Path) -> None:
     except OSError:
         body = ""
     if "references/" in body and not (skill_dst.parent / "references").exists():
-        print("  warning: skill references/ sidecar is missing. Run 'graphify install' to repair.", file=sys.stderr)
+        print(f"  warning: {_skill_label(skill_dst)}: skill references/ sidecar is missing. "
+              f"Run 'graphify install' to repair.", file=sys.stderr)
     try:
         installed = version_file.read_text(encoding="utf-8").strip()
     except OSError:
@@ -196,14 +232,16 @@ def _check_skill_version(skill_dst: Path) -> None:
             # skill. The real fix is to upgrade the package (#1568). Common for a stale
             # `uv tool` CLI, or a contributor whose dev checkout stamped a newer skill.
             print(
-                f"  warning: skill is from graphify {installed}, but the package is "
+                f"  warning: {_skill_label(skill_dst)}: skill is from graphify {installed}, but the package is "
                 f"{__version__} (older). Upgrade the package "
                 f"(e.g. 'uv tool upgrade graphifyy' or 'pip install -U graphifyy'); "
                 f"running 'graphify install' would downgrade the skill.",
                 file=sys.stderr,
             )
         else:
-            print(f"  warning: skill is from graphify {installed}, package is {__version__}. Run 'graphify install' to update.", file=sys.stderr)
+            print(f"  warning: {_skill_label(skill_dst)}: skill is from graphify {installed}, "
+              f"package is {__version__}. Run '{_skill_repair_command(skill_dst)}' "
+              f"to update.", file=sys.stderr)
 
 
 def _version_tuple(version: str) -> tuple[int, ...]:
