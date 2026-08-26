@@ -34,7 +34,10 @@ def _parent(result: dict, label: str) -> str:
 
 
 def test_shaderlab_dispatch_is_case_insensitive() -> None:
-    for ext in (".shader", ".compute", ".cginc", ".hlslinc"):
+    # .hlsl/.hlsli are here too: a bare URP include carries no ShaderLab
+    # wrapper but is written in the same SRP macros, so it needs this
+    # extractor's neutralization pass. See LANGUAGE_EXTRACTORS in extract.py.
+    for ext in (".shader", ".compute", ".cginc", ".hlslinc", ".hlsl", ".hlsli"):
         assert _get_extractor(Path("x" + ext)) is extract_shaderlab
         assert _get_extractor(Path("x" + ext.upper())) is extract_shaderlab
         assert ext in CODE_EXTENSIONS
@@ -250,3 +253,38 @@ def test_fixed_function_shaderlab_has_no_hlsl_to_parse(tmp_path: Path) -> None:
     result = extract_shaderlab(shader)
     assert "parse_errors" not in result
     assert _node(result, "Legacy Shaders/Diffuse Fast")
+
+
+def test_bare_hlsl_include_gets_srp_macro_neutralization(tmp_path: Path) -> None:
+    """URP's .hlsl library is written in SRP macros despite having no ShaderLab
+    wrapper, which is why .hlsl routes through this extractor rather than
+    straight to shader.py's extract_hlsl."""
+    include = tmp_path / "LitInput.hlsl"
+    include.write_text(
+        "CBUFFER_START(UnityPerMaterial)\n"
+        "    float4 _BaseMap_ST;\n"
+        "    half4 _BaseColor;\n"
+        "CBUFFER_END\n"
+        "\n"
+        "struct SurfaceDescription\n"
+        "{\n"
+        "    half3 albedo;\n"
+        "    UNITY_VERTEX_INPUT_INSTANCE_ID\n"
+        "};\n"
+        "\n"
+        "half3 SampleAlbedo(float2 uv)\n"
+        "{\n"
+        "    return _BaseColor.rgb;\n"
+        "}\n",
+        encoding="utf-8",
+    )
+
+    routed = extract_shaderlab(include)
+    assert "parse_errors" not in routed
+    assert _meta(routed, "UnityPerMaterial")["resource_kind"] == "uniform_buffer"
+    assert _node(routed, "SurfaceDescription")
+    assert _line(routed, "SampleAlbedo()") == 12
+
+    # The negative control: without the pass, the same file does not parse.
+    from graphify.extractors.shader import extract_hlsl
+    assert extract_hlsl(include)["parse_errors"]["count"] > 0

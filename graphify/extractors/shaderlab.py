@@ -1,4 +1,10 @@
-"""Unity ShaderLab extraction (.shader, .compute, .cginc, .hlslinc).
+"""Unity shader extraction (.shader, .compute, .cginc, .hlslinc, .hlsl, .hlsli).
+
+Every Unity shader extension routes here, not only the ShaderLab ones. A .hlsl
+in URP's ShaderLibrary has no ShaderLab wrapper, but it is written in the same
+SRP macros as a .shader, and shader.py's extractor does not know them - so it
+still needs the neutralization pass below. The ShaderLab-specific layers (the
+Shader node, Pass nodes) simply find nothing in a bare include and no-op.
 
 A Unity .shader file is a ShaderLab document with HLSL/Cg embedded in
 HLSLPROGRAM..ENDHLSL (or CGPROGRAM..ENDCG) blocks, so tree-sitter-hlsl cannot
@@ -230,10 +236,11 @@ def _add_shaderlab_structure(extractor, text: str) -> None:
 
 
 def extract_shaderlab(path: Path) -> dict:
-    """Reflect a Unity ShaderLab or bare HLSL include/compute file.
+    """Reflect a Unity .shader, .compute, or HLSL include.
 
     Delegates the HLSL body to shader.py's extractor and layers the ShaderLab
-    structure (Shader name, Pass blocks) on top.
+    structure (Shader name, Pass blocks) on top. On a bare include there is no
+    such structure to add, and the value is the SRP macro neutralization alone.
     """
     try:
         text = path.read_bytes().decode("utf-8", errors="replace")

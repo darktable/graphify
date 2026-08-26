@@ -5191,8 +5191,23 @@ _DISPATCH: dict[str, Any] = {
     ".cu": extract_cpp,
     ".cuh": extract_cpp,
     ".metal": extract_cpp,
-    ".hlsl": extract_hlsl,
-    ".hlsli": extract_hlsl,
+    # .hlsl/.hlsli go to extract_shaderlab rather than extract_hlsl even though
+    # they carry no ShaderLab wrapper. extract_shaderlab is extract_hlsl plus a
+    # pass that neutralizes Unity SRP macros (CBUFFER_START/END, and a bare
+    # ALL_CAPS macro line with no terminating ';'), and URP's own .hlsl library
+    # is written in exactly those macros - they are not confined to .shader
+    # files. Without the pass the grammar's error recovery swallows whole
+    # declarations: measured over Unity 6000.5 + URP (136 .hlsl files), routing
+    # here left 85 files identical, improved 51, and regressed 0, for +70 nodes.
+    # SpeedTree8Passes.hlsl alone goes from 68 errors / 1 node to 4 / 42.
+    #
+    # The tradeoff: a NON-Unity .hlsl also gets the macro rewrite. That is safe
+    # for the CBUFFER rules (they only fire on those literal Unity tokens) and
+    # near-free for the bare-macro rule (appending ';' to a lone ALL_CAPS line
+    # yields an empty statement). If graphify ever needs to serve generic HLSL
+    # first, split this on a Unity-marker sniff rather than reverting it.
+    ".hlsl": extract_shaderlab,
+    ".hlsli": extract_shaderlab,
     ".glsl": extract_glsl,
     ".slang": extract_slang,
     ".shader": extract_shaderlab,

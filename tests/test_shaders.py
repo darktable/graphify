@@ -3,6 +3,7 @@ from pathlib import Path
 from graphify.extract import _get_extractor, extract
 from graphify.extractors.spirv import extract_spirv
 from graphify.extractors.shader import extract_glsl, extract_hlsl, extract_slang
+from graphify.extractors.shaderlab import extract_shaderlab
 
 
 def _node(result: dict, label: str) -> dict:
@@ -14,8 +15,12 @@ def _edges(result: dict, relation: str) -> list[dict]:
 
 
 def test_shader_dispatch_is_case_insensitive() -> None:
-    assert _get_extractor(Path("x.HLSL")) is extract_hlsl
-    assert _get_extractor(Path("x.HLSLI")) is extract_hlsl
+    # .hlsl/.hlsli dispatch to extract_shaderlab, which wraps extract_hlsl with
+    # Unity SRP macro neutralization - URP's .hlsl library needs it. See the
+    # comment on LANGUAGE_EXTRACTORS in extract.py. The tests below still call
+    # extract_hlsl directly, so they pin the unwrapped extractor's behavior.
+    assert _get_extractor(Path("x.HLSL")) is extract_shaderlab
+    assert _get_extractor(Path("x.HLSLI")) is extract_shaderlab
     assert _get_extractor(Path("x.GLSL")) is extract_glsl
     assert _get_extractor(Path("x.SLANG")) is extract_slang
     assert _get_extractor(Path("x.SPV")) is extract_spirv
