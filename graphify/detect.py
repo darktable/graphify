@@ -20,6 +20,7 @@ from graphify.google_workspace import (
     google_workspace_enabled,
 )
 from graphify.paths import GRAPHIFY_OUT, out_path
+from graphify.proc import no_window_kwargs
 
 
 class FileType(str, Enum):
@@ -1049,6 +1050,7 @@ def _git_tracked_path_keys(root: Path) -> tuple[set[str], set[str]]:
             check=False,
             timeout=30,
             env={**os.environ, "GIT_OPTIONAL_LOCKS": "0"},
+            **no_window_kwargs(),
         )
     except (OSError, subprocess.SubprocessError):
         return set(), set()

@@ -18,6 +18,8 @@ import urllib.parse
 from pathlib import Path
 from typing import Callable, Any
 
+from graphify.proc import no_window_kwargs
+
 
 GOOGLE_WORKSPACE_EXTENSIONS = {".gdoc", ".gsheet", ".gslides"}
 
@@ -113,6 +115,7 @@ def _run_gws_export(file_id: str, mime_type: str, output: Path, resource_key: st
         cwd=output.parent,
         text=True,
         timeout=timeout,
+        **no_window_kwargs(),
     )
     if result.returncode != 0:
         stderr = (result.stderr or result.stdout or "").strip()

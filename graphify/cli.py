@@ -873,6 +873,7 @@ def _clone_repo(
     runs on the same URL reuse the existing clone (git pull instead of clone).
     """
     import subprocess as _sp
+    from graphify.proc import no_window_kwargs
     import re as _re
 
     # Normalise URL — strip trailing .git if present
@@ -904,7 +905,7 @@ def _clone_repo(
         cmd = ["git", "-C", str(dest), "pull"]
         if branch:
             cmd += ["origin", "--", branch]
-        result = _sp.run(cmd, capture_output=True, text=True)
+        result = _sp.run(cmd, capture_output=True, text=True, **no_window_kwargs())
         if result.returncode != 0:
             print(f"warning: git pull failed:\n{result.stderr}", file=sys.stderr)
     else:
@@ -914,7 +915,7 @@ def _clone_repo(
         if branch:
             cmd += ["--branch", branch]
         cmd += ["--", git_url, str(dest)]
-        result = _sp.run(cmd, capture_output=True, text=True)
+        result = _sp.run(cmd, capture_output=True, text=True, **no_window_kwargs())
         if result.returncode != 0:
             print(f"error: git clone failed:\n{result.stderr}", file=sys.stderr)
             sys.exit(1)

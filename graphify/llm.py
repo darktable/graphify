@@ -395,10 +395,8 @@ def _no_window_kwargs() -> dict:
     per batch — with Windows Terminal as the default terminal each spawn
     becomes a visible window that appears and vanishes for the duration of the
     model call. CREATE_NO_WINDOW keeps the children invisible; no-op elsewhere."""
-    import subprocess
-    if sys.platform == "win32":
-        return {"creationflags": subprocess.CREATE_NO_WINDOW}
-    return {}
+    from graphify.proc import no_window_kwargs
+    return no_window_kwargs()
 
 
 def _resolve_api_timeout(default: float = 600.0) -> float:

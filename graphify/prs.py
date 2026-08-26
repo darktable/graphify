@@ -31,6 +31,7 @@ if TYPE_CHECKING:
     import networkx as nx
 
 from graphify.paths import default_graph_json as _default_graph_json
+from graphify.proc import no_window_kwargs
 
 
 # ── ANSI colours ─────────────────────────────────────────────────────────────
@@ -145,7 +146,8 @@ def _gh(*args: str) -> list | dict | None:
             # Decode gh's output as UTF-8, not the Windows cp1252 locale codec: gh
             # emits UTF-8 JSON with non-Latin1 titles/logins (emoji, فارسی), and the
             # default text=True decode crashes on those (#1505 fixed the same in llm).
-            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30,
+            **no_window_kwargs(),
         )
         if result.returncode != 0:
             return None
@@ -167,7 +169,8 @@ def _detect_default_branch(repo: str | None = None) -> str:
     try:
         result = subprocess.run(
             ["git", "symbolic-ref", "refs/remotes/origin/HEAD"],
-            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5,
+            **no_window_kwargs(),
         )
         if result.returncode == 0:
             # refs/remotes/origin/main → main
@@ -232,7 +235,7 @@ def fetch_pr_files(number: int, repo: str | None = None) -> list[str]:
     if repo:
         args += ["--repo", repo]
     try:
-        result = subprocess.run(["gh", *args], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30)
+        result = subprocess.run(["gh", *args], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30, **no_window_kwargs())
         if result.returncode != 0:
             return []
         return [l.strip() for l in result.stdout.splitlines() if l.strip()]
@@ -303,7 +306,8 @@ def fetch_worktrees() -> dict[str, str]:
     try:
         result = subprocess.run(
             ["git", "worktree", "list", "--porcelain"],
-            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10,
+            **no_window_kwargs(),
         )
         if result.returncode != 0:
             return {}
@@ -660,6 +664,7 @@ def triage_with_opus(prs: list[PRInfo], base: str) -> None:
                 [_claude, "-p", "--no-session-persistence"],
                 input=prompt, capture_output=True, text=True,
                 encoding="utf-8", errors="replace", timeout=120,
+                **no_window_kwargs(),
             )
             if proc.returncode != 0:
                 print(red(f"  claude -p failed: {proc.stderr.strip()[:300]}"), file=sys.stderr)

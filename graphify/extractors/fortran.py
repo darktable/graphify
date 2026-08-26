@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from graphify.extractors.base import _file_stem, _make_id, _read_text
+from graphify.proc import no_window_kwargs
 
 
 _FORTRAN_CPP_EXTS = {".F", ".F90", ".F95", ".F03", ".F08"}
@@ -36,6 +37,7 @@ def _cpp_preprocess(path: Path) -> bytes:
             ["cpp", "-w", "-P", "-nostdinc", "-I", "/dev/null", str(path.resolve())],
             capture_output=True,
             timeout=30,
+            **no_window_kwargs(),
         )
         if result.returncode == 0 and result.stdout:
             return result.stdout
